@@ -51,8 +51,8 @@ main{max-width:1360px;margin:auto;padding:22px clamp(12px,3vw,32px) 40px}
 </section>
 <section id="blast" class="view"><div class="intro"><div><h2>Blast Motion</h2><p>バットスピード・オンプレーン効率・パワー等、スイング特性を可視化。</p></div></div><div class="cards" id="blastCards"></div><div class="grid2"><div class="panel"><h3>バットスピードの分布</h3><div class="sub">Bat Speed (km/h)</div><canvas id="blastChart" class="chart"></canvas></div><div class="panel"><h3>Blast 計測データ</h3><div class="sub">Excel Sheet1から読込</div><div class="filters"><input id="blastSearch" placeholder="バット名・条件などで検索"></div><div class="tablewrap"><table id="blastTable"></table></div></div></div></section>
 <section id="import" class="view"><div class="intro"><div><h2>データ管理</h2><p>ファイルを追加登録して、チーム内で共有します。</p></div></div><div class="panel"><div class="panel-head"><div><h3>データ取込</h3><div class="sub">CSV / Excel（.xlsx）対応。ブラウザ内で処理します。</div></div></div><div class="filters" style="margin-bottom:14px"><label style="font-size:12px;font-weight:700">登録する選手名（空欄可） <input id="registerName" placeholder="例：常谷" style="margin-left:6px;padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)"></label></div>
-<div class="uploads"><div class="upload"><strong>Rapsodo 打撃 CSV</strong><p>打球速度、打球角度、飛距離、回転数</p><input type="file" accept=".csv" id="rapUpload"></div><div class="upload"><strong>Rapsodo 投球 CSV</strong><p>球速、球種、回転、変化量、リリース指標</p><input type="file" accept=".csv" id="pitUpload"></div><div class="upload"><strong>Blast Motion Excel / CSV</strong><p>ExcelはSheet1を読み込みます。</p><input type="file" accept=".xlsx,.xls,.csv" id="blastUpload"></div></div><p class="sub" id="importStatus">ログイン後、クラウド上のデータを読み込みます。</p></div>
-<div class="panel"><h3>登録データ件数</h3><div id="counts" class="sub" style="margin-top:10px"></div><p class="sub">※データはFirestoreに保存されます。</p></div></section>
+<div class="uploads"><div class="upload"><strong>Rapsodo 打撃 CSV</strong><p>打球速度、打球角度、飛距離、回転数</p><input type="file" accept=".csv" id="rapUpload" multiple></div><div class="upload"><strong>Rapsodo 投球 CSV</strong><p>球速、球種、回転、変化量、リリース指標</p><input type="file" accept=".csv" id="pitUpload" multiple></div><div class="upload"><strong>Blast Motion Excel / CSV</strong><p>ExcelはSheet1を読み込みます。</p><input type="file" accept=".xlsx,.xls,.csv" id="blastUpload" multiple></div></div><div style="margin-top:16px"><h3>保存前のファイル一覧</h3><div id="pendingFiles" class="sub">ファイルはまだ選択されていません。</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn primary" id="saveFiles" disabled>選択したファイルを保存</button><button class="btn" id="clearPending" disabled>選択を取り消す</button></div></div><p class="sub" id="importStatus" role="status">ファイル選択後、保存ボタンでクラウドに登録します。</p></div>
+<div class="panel"><h3>登録済みファイル</h3><p class="sub">ファイル単位で削除できます。従来のデータで登録単位を特定できないものは、一括削除しません。</p><div id="savedFiles" class="tablewrap"></div></div><div class="panel"><h3>登録データ件数</h3><div id="counts" class="sub" style="margin-top:10px"></div><p class="sub">※データはFirestoreに保存されます。</p></div></section>
 <div class="footer">HGU-Lab Performance Data · Analyst / Player Development</div></main>
 <div class="auth-overlay" id="authOverlay"><div class="auth-box"><h3 style="margin:0 0 6px">アナリストログイン</h3><p style="font-size:12px;color:var(--muted)">登録・削除はアナリストのみ操作できます。</p><input type="password" id="analystPassword" placeholder="パスワード"><div style="display:flex;gap:8px"><button class="btn primary" id="loginSubmit">ログイン</button><button class="btn" id="loginCancel">キャンセル</button></div><p id="authMessage" style="font-size:12px;color:#d44"></p></div></div>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -85,9 +85,9 @@ drawLine("pitchChart",pv);drawScatter("scatter",ev,la);
 let groups={};data.pitching.forEach(r=>{let t=r["Pitch Type"]||"-",v=num(r.Velocity);if(Number.isFinite(v)){(groups[t]??=[]).push(v)}});let gkeys=Object.keys(groups);drawBars("typeChart",gkeys,gkeys.map(k=>avg(groups[k])));
 drawBars("blastChart",["<100","100-110","110-120","120+"],[bs.filter(v=>v<100).length,bs.filter(v=>v>=100&&v<110).length,bs.filter(v=>v>=110&&v<120).length,bs.filter(v=>v>=120).length]);
 let recent=[...data.rapsodo.slice(0,5).map(r=>({Type:"Rapsodo打撃",Date:r.Date,Measure:fmt(num(r.ExitVelocity))+" km/h EV"})),...data.pitching.slice(0,5).map(r=>({Type:"Rapsodo投球",Date:r.Date,Measure:fmt(num(r.Velocity))+" km/h 球速"})),...data.blast.slice(0,5).map(r=>({Type:"Blast",Date:r["日付"],Measure:fmt(num(r["バットスピード (km/h)"]))+" km/h Bat Speed"}))];table("recentTable",recent,[["Type","種別"],["Date","日付"],["Measure","主要指標"]]);
-table("rapTable",filtered(data.rapsodo,$("rapSearch").value),[["No","No"],["Date","日時"],["ExitVelocity","打球速度"],["LaunchAngle","打球角度"],["Distance","飛距離"],["Spin","回転数"],["ExitDirection","打球方向"]]);
-table("pitTable",filtered(data.pitching,$("pitSearch").value),[["No","No"],["Date","日時"],["Pitch Type","球種"],["Is Strike","ストライク"],["Velocity","球速"],["Total Spin","回転数"],["Spin Efficiency (release)","回転効率"],["VB (trajectory)","縦変化"],["HB (trajectory)","横変化"]]);
-table("blastTable",filtered(data.blast,$("blastSearch").value),[["日付","日時"],["バット","バット"],["スイング条件","条件"],["バットスピード (km/h)","バット速度"],["オンプレーンスコア","オンプレーン"],["オンプレーンの効率 (%)","効率 (%)"],["パワー (kW)","パワー"]]);
+table("rapTable",filtered(data.rapsodo,$("rapSearch").value),[["__personName","選手名"],["No","No"],["Date","日時"],["ExitVelocity","打球速度"],["LaunchAngle","打球角度"],["Distance","飛距離"],["Spin","回転数"],["ExitDirection","打球方向"]]);
+table("pitTable",filtered(data.pitching,$("pitSearch").value),[["__personName","選手名"],["No","No"],["Date","日時"],["Pitch Type","球種"],["Is Strike","ストライク"],["Velocity","球速"],["Total Spin","回転数"],["Spin Efficiency (release)","回転効率"],["VB (trajectory)","縦変化"],["HB (trajectory)","横変化"]]);
+table("blastTable",filtered(data.blast,$("blastSearch").value),[["__personName","選手名"],["日付","日時"],["バット","バット"],["スイング条件","条件"],["バットスピード (km/h)","バット速度"],["オンプレーンスコア","オンプレーン"],["オンプレーンの効率 (%)","効率 (%)"],["パワー (kW)","パワー"]]);
 $("counts").textContent=`Rapsodo打撃：${data.rapsodo.length}件 ／ Rapsodo投球：${data.pitching.length}件 ／ Blast：${data.blast.length}件`;
 }
 function filtered(rows,q){q=(q||"").toLowerCase().trim();return q?rows.filter(r=>Object.values(r).some(v=>String(v??"").toLowerCase().includes(q))):rows}
@@ -134,9 +134,9 @@ plotScatterCanvas("movementPlot",pp,"HB (trajectory)","VB (trajectory)",true);pl
 let typeSel=$("pitchTypeSelect"),old=typeSel.value,types=[...new Set(pp.map(r=>r["Pitch Type"]).filter(Boolean))];typeSel.innerHTML='<option value="ALL">全球種</option>'+types.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join("");if(types.includes(old))typeSel.value=old;let selected=typeSel.value,trendRows=pp.filter(r=>selected==="ALL"||r["Pitch Type"]===selected);trendLine("pitchTrend",trendRows,$("pitchMetricSelect").value);
 let recent=[...rr.slice(0,5).map(r=>({Type:"Rapsodo打撃",Name:rowName(r)||"未設定",Date:r.Date,Measure:fmt(num(r.ExitVelocity))+" km/h EV"})),...pp.slice(0,5).map(r=>({Type:"Rapsodo投球",Name:rowName(r)||"未設定",Date:r.Date,Measure:fmt(num(r.Velocity))+" km/h 球速"})),...bb.slice(0,5).map(r=>({Type:"Blast",Name:rowName(r)||"未設定",Date:r["日付"],Measure:fmt(num(r["バットスピード (km/h)"]))+" km/h Bat Speed"}))];
 table("recentTable",recent,[["Type","種別"],["Name","選手名"],["Date","日付"],["Measure","主要指標"]]);
-renderManageTable("rapTable",rr,[["No","No"],["Date","日時"],["ExitVelocity","打球速度"],["LaunchAngle","打球角度"],["Distance","飛距離"],["Spin","回転数"],["ExitDirection","打球方向"]],"rapsodo");
-renderManageTable("pitTable",pp,[["No","No"],["Date","日時"],["Pitch Type","球種"],["Is Strike","ストライク"],["Velocity","球速"],["Total Spin","回転数"],["Spin Efficiency (release)","回転効率"],["VB (trajectory)","縦変化"],["HB (trajectory)","横変化"]],"pitching");
-renderManageTable("blastTable",bb,[["日付","日時"],["バット","バット"],["スイング条件","条件"],["バットスピード (km/h)","バット速度"],["オンプレーンスコア","オンプレーン"],["オンプレーンの効率 (%)","効率 (%)"],["パワー (kW)","パワー"]],"blast");
+renderManageTable("rapTable",rr,[["__personName","選手名"],["No","No"],["Date","日時"],["ExitVelocity","打球速度"],["LaunchAngle","打球角度"],["Distance","飛距離"],["Spin","回転数"],["ExitDirection","打球方向"]],"rapsodo");
+renderManageTable("pitTable",pp,[["__personName","選手名"],["No","No"],["Date","日時"],["Pitch Type","球種"],["Is Strike","ストライク"],["Velocity","球速"],["Total Spin","回転数"],["Spin Efficiency (release)","回転効率"],["VB (trajectory)","縦変化"],["HB (trajectory)","横変化"]],"pitching");
+renderManageTable("blastTable",bb,[["__personName","選手名"],["日付","日時"],["バット","バット"],["スイング条件","条件"],["バットスピード (km/h)","バット速度"],["オンプレーンスコア","オンプレーン"],["オンプレーンの効率 (%)","効率 (%)"],["パワー (kW)","パワー"]],"blast");
 $("counts").textContent=`Rapsodo打撃：${data.rapsodo.length}件 ／ Rapsodo投球：${data.pitching.length}件 ／ Blast：${data.blast.length}件`;
 document.querySelectorAll(".upload input").forEach(el=>el.disabled=!analystMode);
 }
@@ -149,13 +149,78 @@ function render(){enhancedRender()}
 $("personFilter").addEventListener("change",render);$("dateFrom").addEventListener("change",render);$("dateTo").addEventListener("change",render);$("clearFilters").onclick=()=>{$("personFilter").value="";$("dateFrom").value="";$("dateTo").value="";render()};
 $("pitchTypeSelect").addEventListener("change",render);$("pitchMetricSelect").addEventListener("change",render);
 // Firebase認証は末尾のmoduleで管理する。
-window.setPerformanceAuth=(isAnalyst,label)=>{analystMode=isAnalyst;$("authState").textContent=label;$("authBtn").textContent=label==="未ログイン"?"Googleログイン":"ログアウト";render()};
-window.setPerformanceData=(rows)=>{data={rapsodo:[],pitching:[],blast:[]};for(const item of rows){if(data[item.kind])data[item.kind].push({...item.values,__cloudId:item.id})}render()};
+window.setPerformanceAuth=(isAnalyst,label)=>{analystMode=isAnalyst;$("authState").textContent=label;$("authBtn").textContent=label==="未ログイン"?"Googleログイン":"ログアウト";render();renderPendingFiles();renderSavedFiles()};
+window.setPerformanceData=(rows)=>{window.cloudPerformanceRows=rows;data={rapsodo:[],pitching:[],blast:[]};for(const item of rows){if(data[item.kind])data[item.kind].push({...item.values,__cloudId:item.id})}render();renderSavedFiles()};
 $("authBtn").onclick=()=>window.performanceSignIn?.();
-function loadUploadWithName(file,kind){if(!analystMode){alert("アナリストのみ登録できます");return}if(!file)return;let reader=new FileReader();reader.onload=async e=>{try{let wb=file.name.toLowerCase().endsWith(".csv")?XLSX.read(e.target.result,{type:"string"}):XLSX.read(e.target.result,{type:"array",cellDates:true});let rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:null});let name=$("registerName").value.trim();rows=rows.map(r=>({...r,__personName:name}));$("importStatus").textContent="クラウドに登録中…";await window.performanceUpload(kind,rows,file);$("importStatus").textContent=`${file.name}：${rows.length}件を登録しました。`; }catch(err){$("importStatus").textContent="登録エラー："+err.message}};if(file.name.toLowerCase().endsWith(".csv"))reader.readAsText(file);else reader.readAsArrayBuffer(file)}
-$("rapUpload").onchange=e=>loadUploadWithName(e.target.files[0],"rapsodo");$("pitUpload").onchange=e=>loadUploadWithName(e.target.files[0],"pitching");$("blastUpload").onchange=e=>loadUploadWithName(e.target.files[0],"blast");
+// ファイル選択は保存前の待機状態にする。選手名は各ファイル選択時点で記録。
+let pendingPerformanceFiles=[];
+const kindLabels={rapsodo:'Rapsodo 打撃',pitching:'Rapsodo 投球',blast:'Blast Motion'};
+function renderPendingFiles(){
+ const area=$("pendingFiles");
+ area.innerHTML=pendingPerformanceFiles.length?'<div class="tablewrap"><table><thead><tr><th>種別</th><th>ファイル</th><th>選手名</th><th>件数</th><th>操作</th></tr></thead><tbody>'+pendingPerformanceFiles.map((f,i)=>`<tr><td>${esc(kindLabels[f.kind])}</td><td>${esc(f.file.name)}</td><td>${esc(f.personName||'未設定')}</td><td>${f.rows.length}</td><td><button class="btn" data-remove-pending="${i}">取り消し</button></td></tr>`).join('')+'</tbody></table></div>':'ファイルはまだ選択されていません。';
+ area.querySelectorAll('[data-remove-pending]').forEach(btn=>btn.onclick=()=>{pendingPerformanceFiles.splice(Number(btn.dataset.removePending),1);renderPendingFiles()});
+ $("saveFiles").disabled=!analystMode||!pendingPerformanceFiles.length;
+ $("clearPending").disabled=!analystMode||!pendingPerformanceFiles.length;
+}
+function stagePerformanceFiles(files,kind){
+ if(!analystMode){alert('アナリストのみ登録できます');return}
+ const personName=$("registerName").value.trim();
+ for(const file of Array.from(files)){
+  const reader=new FileReader();
+  reader.onload=e=>{try{
+   const csv=file.name.toLowerCase().endsWith('.csv');
+   const wb=XLSX.read(e.target.result,csv?{type:'string'}:{type:'array',cellDates:true});
+   const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:null});
+   if(!rows.length)throw Error('データ行がありません');
+   pendingPerformanceFiles.push({file,kind,personName,rows:rows.map(r=>({...r,__personName:personName}))});
+   $("importStatus").textContent=`${file.name} を保存待ちに追加しました。保存ボタンを押すまでクラウドには登録されません。`;
+   renderPendingFiles();
+  }catch(err){$("importStatus").textContent=`${file.name} 読込エラー：${err.message}`}};
+  if(file.name.toLowerCase().endsWith('.csv'))reader.readAsText(file);else reader.readAsArrayBuffer(file);
+ }
+}
+$("rapUpload").onchange=e=>{stagePerformanceFiles(e.target.files,'rapsodo');e.target.value=''};
+$("pitUpload").onchange=e=>{stagePerformanceFiles(e.target.files,'pitching');e.target.value=''};
+$("blastUpload").onchange=e=>{stagePerformanceFiles(e.target.files,'blast');e.target.value=''};
+$("clearPending").onclick=()=>{pendingPerformanceFiles=[];renderPendingFiles()};
+$("saveFiles").onclick=async()=>{
+ if(!analystMode||!pendingPerformanceFiles.length)return;
+ const btn=$("saveFiles");btn.disabled=true;
+ let completed=0;
+ try{
+  while(pendingPerformanceFiles.length){
+   const f=pendingPerformanceFiles[0];
+   $("importStatus").textContent=`保存中：${f.file.name}（${completed+1}ファイル目）`;
+   await window.performanceUpload(f.kind,f.rows,f.file,f.personName);
+   pendingPerformanceFiles.shift();completed++;renderPendingFiles();
+  }
+  $("importStatus").textContent=`${completed}ファイルをFirestoreに保存しました。`;
+ }catch(err){$("importStatus").textContent=`${completed}ファイル保存済み。残りの保存に失敗：${err.message}。再保存前に登録済み一覧を確認してください。`}
+ finally{renderPendingFiles()}
+};
+function renderSavedFiles(){
+ const target=$("savedFiles"),rows=window.cloudPerformanceRows||[];
+ const groups=new Map();
+ for(const r of rows){
+  const key=r.uploadGroupId||`legacy:${r.kind||''}:${r.sourceFile||'不明'}`;
+  if(!groups.has(key))groups.set(key,{id:r.uploadGroupId||null,kind:r.kind||'',name:r.sourceFile||'ファイル名不明',person:r.personName??r.values?.__personName??'',count:0,ids:[],date:r.uploadedAt||''});
+  const g=groups.get(key);g.count++;g.ids.push(r.id);
+ }
+ if(!groups.size){target.innerHTML='<div class="empty">登録済みファイルはありません。</div>';return}
+ target.innerHTML='<table><thead><tr><th>種類</th><th>ファイル名</th><th>選手名</th><th>データ数</th><th>登録日</th><th>操作</th></tr></thead><tbody>'+[...groups.values()].map((g,i)=>`<tr><td>${esc(kindLabels[g.kind]||g.kind)}</td><td>${esc(g.name)}</td><td>${esc(g.person||'未設定')}</td><td>${g.count}</td><td>${esc(g.date.slice(0,10))}</td><td>${analystMode&&g.id?`<button class="btn" data-delete-group="${i}" style="color:#c33">ファイルごと削除</button>`:g.id?'閲覧のみ':'個別削除のみ'}</td></tr>`).join('')+'</tbody></table>';
+ const list=[...groups.values()];
+ target.querySelectorAll('[data-delete-group]').forEach(btn=>btn.onclick=async()=>{
+  const g=list[Number(btn.dataset.deleteGroup)];
+  if(!analystMode||!g.id)return;
+  if(!confirm(`「${g.name}」（${g.count}件）をすべて削除しますか？この操作は元に戻せません。`))return;
+  btn.disabled=true;
+  try{await window.performanceDeleteGroup(g.id);$("importStatus").textContent=`${g.name} を削除しました。`}
+  catch(err){alert('ファイル削除エラー：'+err.message);btn.disabled=false}
+ });
+}
 
-render();
+
+render();renderPendingFiles();
 
 </script>
 <!-- Firebase module -->
@@ -170,6 +235,7 @@ const msg=t=>document.getElementById('gateText').textContent=t;
 window.performanceSignIn=async()=>{try{if(auth.currentUser)await signOut(auth);else await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){alert('認証エラー：'+e.message)}};
 document.getElementById('gateLogin').onclick=()=>window.performanceSignIn();
 onAuthStateChanged(auth,async user=>{if(unsubscribe){unsubscribe();unsubscribe=null}allowed=false;analyst=false;window.setPerformanceData([]);if(!user){gate.style.display='grid';msg('Googleアカウントでログインしてください');document.getElementById('gateLogin').style.display='inline-block';window.setPerformanceAuth(false,'未ログイン');return}try{analyst=user.email?.toLowerCase()==='hokkaigakuenbaseball@gmail.com'&&user.emailVerified;const approval=analyst?null:await getDoc(doc(db,'approvedUsers',user.uid));allowed=analyst||approval?.data()?.approved===true;if(!allowed){gate.style.display='grid';msg('このアカウントは未承認です。HGU-Labホームページで招待登録してください。');document.getElementById('gateLogin').style.display='none';window.setPerformanceAuth(false,'未承認');return}gate.style.display='none';window.setPerformanceAuth(analyst,analyst?'アナリスト':'選手・閲覧専用');unsubscribe=onSnapshot(collection(db,'performanceRecords'),snap=>window.setPerformanceData(snap.docs.map(d=>({id:d.id,...d.data()}))),e=>alert('データ読込エラー：'+e.message))}catch(e){gate.style.display='grid';msg('認証確認エラー：'+e.message)}});
-window.performanceUpload=async(kind,rows,file)=>{if(!analyst||!allowed)throw Error('編集権限がありません');if(!rows.length)throw Error('データがありません');let i=0;while(i<rows.length){const batch=writeBatch(db);for(const row of rows.slice(i,i+300)){const ref=doc(collection(db,'performanceRecords'));const values=JSON.parse(JSON.stringify(row,(k,v)=>v instanceof Date?v.toISOString():v));batch.set(ref,{kind,values,sourceFile:file.name,uploadedAt:new Date().toISOString()})}await batch.commit();i+=300}};
+window.performanceUpload=async(kind,rows,file,personName)=>{if(!analyst||!allowed)throw Error('編集権限がありません');if(!rows.length)throw Error('データがありません');const uploadGroupId=doc(collection(db,'performanceRecords')).id;let i=0;while(i<rows.length){const batch=writeBatch(db);for(const row of rows.slice(i,i+300)){const ref=doc(collection(db,'performanceRecords'));const values=JSON.parse(JSON.stringify(row,(k,v)=>v instanceof Date?v.toISOString():v));batch.set(ref,{kind,values,sourceFile:file.name,personName:personName||"",uploadGroupId,uploadedAt:new Date().toISOString()})}await batch.commit();i+=300}};
+window.performanceDeleteGroup=async groupId=>{if(!analyst||!allowed)throw Error('編集権限がありません');const {getDocs,query,where}=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');const snap=await getDocs(query(collection(db,'performanceRecords'),where('uploadGroupId','==',groupId)));const docs=snap.docs;for(let i=0;i<docs.length;i+=400){const batch=writeBatch(db);for(const d of docs.slice(i,i+400))batch.delete(d.ref);await batch.commit()}};
 window.performanceDelete=async id=>{if(!analyst||!allowed)throw Error('編集権限がありません');if(!id)throw Error('削除対象が不明です');await deleteDoc(doc(db,'performanceRecords',id))};
 </script></body></html>
