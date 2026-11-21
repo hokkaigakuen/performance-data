@@ -162,20 +162,43 @@ function renderPendingFiles(){
  $("saveFiles").disabled=!analystMode||!pendingPerformanceFiles.length;
  $("clearPending").disabled=!analystMode||!pendingPerformanceFiles.length;
 }
+function parsePerformanceUpload(file, raw, kind){
+ const csv=file.name.toLowerCase().endsWith('.csv');
+ const wb=XLSX.read(raw,csv?{type:'string'}:{type:'array',cellDates:true});
+ const sheet=wb.Sheets[wb.SheetNames[0]];
+ const matrix=XLSX.utils.sheet_to_json(sheet,{header:1,defval:'',blankrows:false});
+ const norm=v=>String(v??'').replace(/^\uFEFF/,'').trim().toLowerCase();
+ const headerIndex=matrix.findIndex(row=>{
+  const keys=new Set(row.map(norm));
+  return (keys.has('pitch type')&&keys.has('velocity')) ||
+         (keys.has('exitvelocity')&&keys.has('launchangle')) ||
+         (keys.has('バットスピード (km/h)')&&keys.has('オンプレーンの効率 (%)'));
+ });
+ if(headerIndex<0)throw Error('対応するデータの見出しが見つかりません。Rapsodo打撃・投球またはBlastのCSV/Excelを確認してください。');
+ const keys=new Set(matrix[headerIndex].map(norm));
+ const detected=keys.has('pitch type')&&keys.has('velocity')?'pitching':
+                keys.has('exitvelocity')&&keys.has('launchangle')?'rapsodo':'blast';
+ if(detected!==kind)throw Error(`このファイルは「${kindLabels[detected]}」です。「${kindLabels[kind]}」には登録できません。`);
+ const rows=XLSX.utils.sheet_to_json(sheet,{range:headerIndex,defval:null,raw:true});
+ const valid=rows.filter(row=>{
+  if(kind==='pitching')return Number.isFinite(Number(row.Velocity))&&Number(row.Velocity)>0;
+  if(kind==='rapsodo')return Number.isFinite(Number(row.ExitVelocity))&&Number(row.ExitVelocity)>0;
+  return Object.values(row).some(v=>v!==null&&v!=='');
+ });
+ if(!valid.length)throw Error('有効な計測データがありません。');
+ return valid;
+}
 function stagePerformanceFiles(files,kind){
  if(!analystMode){alert('アナリストのみ登録できます');return}
  const personName=$("registerName").value.trim();
  for(const file of Array.from(files)){
   const reader=new FileReader();
   reader.onload=e=>{try{
-   const csv=file.name.toLowerCase().endsWith('.csv');
-   const wb=XLSX.read(e.target.result,csv?{type:'string'}:{type:'array',cellDates:true});
-   const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:null});
-   if(!rows.length)throw Error('データ行がありません');
+   const rows=parsePerformanceUpload(file,e.target.result,kind);
    pendingPerformanceFiles.push({file,kind,personName,rows:rows.map(r=>({...r,__personName:personName}))});
-   $("importStatus").textContent=`${file.name} を保存待ちに追加しました。保存ボタンを押すまでクラウドには登録されません。`;
+   $("importStatus").textContent=`${file.name} を保存待ちに追加しました（${rows.length}件）。保存ボタンを押すまでクラウドには登録されません。`;
    renderPendingFiles();
-  }catch(err){$("importStatus").textContent=`${file.name} 読込エラー：${err.message}`}};
+  }catch(err){$("importStatus").textContent=`${file.name} 読込エラー：${err.message}`;alert(`${file.name}：${err.message}`)}};
   if(file.name.toLowerCase().endsWith('.csv'))reader.readAsText(file);else reader.readAsArrayBuffer(file);
  }
 }
