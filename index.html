@@ -166,7 +166,7 @@ function parsePerformanceUpload(file, raw, kind){
  const csv=file.name.toLowerCase().endsWith('.csv');
  const wb=XLSX.read(raw,csv?{type:'string'}:{type:'array',cellDates:true});
  const sheet=wb.Sheets[wb.SheetNames[0]];
- const matrix=XLSX.utils.sheet_to_json(sheet,{header:1,defval:'',blankrows:false});
+ const matrix=XLSX.utils.sheet_to_json(sheet,{header:1,defval:'',blankrows:true});
  const norm=v=>String(v??'').replace(/^\uFEFF/,'').trim().toLowerCase();
  const headerIndex=matrix.findIndex(row=>{
   const keys=new Set(row.map(norm));
