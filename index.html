@@ -54,7 +54,7 @@ main{max-width:1360px;margin:auto;padding:22px clamp(12px,3vw,32px) 40px}
 <div class="uploads"><div class="upload"><strong>Rapsodo 打撃 CSV</strong><p>打球速度、打球角度、飛距離、回転数</p><input type="file" accept=".csv" id="rapUpload" multiple></div><div class="upload"><strong>Rapsodo 投球 CSV</strong><p>球速、球種、回転、変化量、リリース指標</p><input type="file" accept=".csv" id="pitUpload" multiple></div><div class="upload"><strong>Blast Motion Excel / CSV</strong><p>ExcelはSheet1を読み込みます。</p><input type="file" accept=".xlsx,.xls,.csv" id="blastUpload" multiple></div></div><div style="margin-top:16px"><h3>保存前のファイル一覧</h3><div id="pendingFiles" class="sub">ファイルはまだ選択されていません。</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn primary" id="saveFiles" disabled>選択したファイルを保存</button><button class="btn" id="clearPending" disabled>選択を取り消す</button></div></div><p class="sub" id="importStatus" role="status">ファイル選択後、保存ボタンでクラウドに登録します。</p></div>
 <div class="panel"><h3>登録済みファイル</h3><p class="sub">ファイル単位で削除できます。従来のデータで登録単位を特定できないものは、一括削除しません。</p><div id="savedFiles" class="tablewrap"></div></div><div class="panel"><h3>登録データ件数</h3><div id="counts" class="sub" style="margin-top:10px"></div><p class="sub">※データはFirestoreに保存されます。</p></div></section>
 <div class="footer">HGU-Lab Performance Data · Analyst / Player Development</div></main>
-<div class="auth-overlay" id="authOverlay"><div class="auth-box"><h3 style="margin:0 0 6px">閲覧パスワード</h3><p style="font-size:12px;color:var(--muted)">Googleログイン後、閲覧パスワードを入力してください。</p><input type="password" id="analystPassword" placeholder="パスワード"><div style="display:flex;gap:8px"><button class="btn primary" id="loginSubmit">ログイン</button><button class="btn" id="loginCancel">ログアウト</button></div><p id="authMessage" style="font-size:12px;color:#d44"></p></div></div>
+
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 let data={rapsodo:[],pitching:[],blast:[]};
@@ -278,37 +278,9 @@ const config={apiKey:"AIzaSyDvIAyFiOLfScIu8-NPQSevfpw1BJw7hA4",authDomain:"hug-b
 const app=initializeApp(config),auth=getAuth(app),db=getFirestore(app);let allowed=false,analyst=false,unsubscribe=null;
 const gate=document.createElement('div');gate.style.cssText='position:fixed;inset:0;z-index:99999;background:#0b1220;color:white;display:grid;place-items:center;padding:20px;text-align:center';gate.innerHTML='<div><h2>HGU-Lab / PERFORMANCE</h2><p id="gateText">ログイン状態を確認しています…</p><button id="gateLogin" style="padding:12px 22px;border:0;border-radius:9px;cursor:pointer;display:none">Googleでログイン</button></div>';document.body.append(gate);
 const msg=t=>document.getElementById('gateText').textContent=t;
-// Google認証と承認確認の後に、閲覧パスワードを要求します。
-const viewerPassword='hgu89';
-const passwordOverlay=document.getElementById('authOverlay');
-passwordOverlay.style.zIndex='100000';
-let passwordRequest=null;
-function requestViewerPassword(user){
-  const sessionKey='hgu-performance-password:'+user.uid;
-  if(sessionStorage.getItem(sessionKey)==='ok')return Promise.resolve(true);
-  passwordOverlay.style.display='grid';
-  document.getElementById('analystPassword').value='';
-  document.getElementById('authMessage').textContent='';
-  return new Promise(resolve=>{
-    passwordRequest=resolve;
-    const input=document.getElementById('analystPassword');
-    const submit=document.getElementById('loginSubmit');
-    submit.onclick=()=>{
-      if(input.value!==viewerPassword){document.getElementById('authMessage').textContent='パスワードが違います。';return}
-      sessionStorage.setItem(sessionKey,'ok');
-      passwordOverlay.style.display='none';passwordRequest=null;resolve(true);
-    };
-    input.onkeydown=e=>{if(e.key==='Enter')submit.click()};
-    document.getElementById('loginCancel').onclick=async()=>{
-      passwordOverlay.style.display='none';passwordRequest=null;resolve(false);await signOut(auth);
-    };
-    input.focus();
-  });
-}
-
 window.performanceSignIn=async()=>{try{if(auth.currentUser)await signOut(auth);else await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){alert('認証エラー：'+e.message)}};
 document.getElementById('gateLogin').onclick=()=>window.performanceSignIn();
-onAuthStateChanged(auth,async user=>{if(passwordRequest){const resolve=passwordRequest;passwordRequest=null;passwordOverlay.style.display='none';resolve(false)}if(unsubscribe){unsubscribe();unsubscribe=null}allowed=false;analyst=false;window.setPerformanceData([]);if(!user){gate.style.display='grid';msg('Googleアカウントでログインしてください');document.getElementById('gateLogin').style.display='inline-block';window.setPerformanceAuth(false,'未ログイン');return}try{analyst=user.email?.toLowerCase()==='hokkaigakuenbaseball@gmail.com'&&user.emailVerified;const approval=analyst?null:await getDoc(doc(db,'approvedUsers',user.uid));allowed=analyst||approval?.data()?.approved===true;if(!allowed){gate.style.display='grid';msg('このアカウントは未承認です。HGU-Labホームページで招待登録してください。');document.getElementById('gateLogin').style.display='none';window.setPerformanceAuth(false,'未承認');return}if(!await requestViewerPassword(user))return;if(auth.currentUser?.uid!==user.uid)return;gate.style.display='none';window.setPerformanceAuth(analyst,analyst?'アナリスト':'選手・閲覧専用');unsubscribe=onSnapshot(collection(db,'performanceRecords'),snap=>window.setPerformanceData(snap.docs.map(d=>({id:d.id,...d.data()}))),e=>alert('データ読込エラー：'+e.message))}catch(e){gate.style.display='grid';msg('認証確認エラー：'+e.message)}});
+onAuthStateChanged(auth,async user=>{if(unsubscribe){unsubscribe();unsubscribe=null}allowed=false;analyst=false;window.setPerformanceData([]);if(!user){gate.style.display='grid';msg('Googleアカウントでログインしてください');document.getElementById('gateLogin').style.display='inline-block';window.setPerformanceAuth(false,'未ログイン');return}try{analyst=user.email?.toLowerCase()==='hokkaigakuenbaseball@gmail.com'&&user.emailVerified;const approval=analyst?null:await getDoc(doc(db,'approvedUsers',user.uid));const a=approval?.exists()?approval.data():null;allowed=analyst||!!(a&&a.approved===true&&a.uid===user.uid&&a.email===user.email&&a.role==='player');if(!allowed){gate.style.display='grid';msg('このアカウントは未承認です。HGU-Labホームページで招待登録してください。');document.getElementById('gateLogin').style.display='none';window.setPerformanceAuth(false,'未承認');return}if(auth.currentUser?.uid!==user.uid)return;gate.style.display='none';window.setPerformanceAuth(analyst,analyst?'アナリスト':'選手・閲覧専用');unsubscribe=onSnapshot(collection(db,'performanceRecords'),snap=>window.setPerformanceData(snap.docs.map(d=>({id:d.id,...d.data()}))),e=>alert('データ読込エラー：'+e.message))}catch(e){gate.style.display='grid';msg('認証確認エラー：'+e.message)}});
 window.performanceUpload=async(kind,rows,file,personName)=>{if(!analyst||!allowed)throw Error('編集権限がありません');if(!rows.length)throw Error('データがありません');const uploadGroupId=doc(collection(db,'performanceRecords')).id;let i=0;while(i<rows.length){const batch=writeBatch(db);for(const row of rows.slice(i,i+300)){const ref=doc(collection(db,'performanceRecords'));const values=JSON.parse(JSON.stringify(row,(k,v)=>v instanceof Date?v.toISOString():v));batch.set(ref,{kind,values,sourceFile:file.name,personName:personName||"",uploadGroupId,uploadedAt:new Date().toISOString()})}await batch.commit();i+=300}};
 window.performanceDeleteGroup=async groupId=>{if(!analyst||!allowed)throw Error('編集権限がありません');const {getDocs,query,where}=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');const snap=await getDocs(query(collection(db,'performanceRecords'),where('uploadGroupId','==',groupId)));const docs=snap.docs;for(let i=0;i<docs.length;i+=400){const batch=writeBatch(db);for(const d of docs.slice(i,i+400))batch.delete(d.ref);await batch.commit()}};
 window.performanceDelete=async id=>{if(!analyst||!allowed)throw Error('編集権限がありません');if(!id)throw Error('削除対象が不明です');await deleteDoc(doc(db,'performanceRecords',id))};
